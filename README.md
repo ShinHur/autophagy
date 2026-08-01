@@ -93,6 +93,10 @@ application registration, and an approval channel to exist first.
    your components need. Blank values fail closed; they do not fall back to defaults.
 3. **Follow the walkthrough** — [`docs/quickstart.md`](docs/quickstart.md).
 
+For the full ordered procedure — from an empty machine to a deployment whose approval gate
+actually closes, together with the gaps this repository does not fill —
+see [`docs/설치-운영-매뉴얼.md`](docs/설치-운영-매뉴얼.md) (Korean).
+
 Multi-node operation is optional. If you want the role split, see
 [`docs/deployment-reference.md`](docs/deployment-reference.md).
 
@@ -165,6 +169,9 @@ preconditions and exit 77 (skip) when those are absent, rather than reporting a 
 2. [`.env.example`](.env.example) — 비공개 파일로 복사해 값을 채운다. 빈 값은 기본값으로
    대체되지 않고 fail-closed로 거부된다.
 3. [`docs/quickstart.md`](docs/quickstart.md) — 단계별 안내.
+
+빈 머신에서 승인 게이트가 실제로 닫히는 배포까지의 실행 순서, 그리고 이 저장소가 답해주지
+않는 지점은 [`docs/설치-운영-매뉴얼.md`](docs/설치-운영-매뉴얼.md)에 정리돼 있다.
 
 단일 노드 운용으로 충분하다. 역할 분리가 필요하면
 [`docs/deployment-reference.md`](docs/deployment-reference.md)를 참고한다.
