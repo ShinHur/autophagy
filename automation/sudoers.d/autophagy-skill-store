@@ -1,0 +1,28 @@
+# TEMPLATE — NOT INSTALLABLE AS-IS. Render it first.
+#
+# A sudoers file that names the wrong account, or that is installed with an
+# unsubstituted placeholder, grants privilege where nobody intended it. So this
+# file is deliberately written to be REJECTED until it is rendered:
+#
+#   1. Replace every %%PLACEHOLDER%% below with the value for this deployment.
+#   2. Delete the bare %%TEMPLATE_NOT_RENDERED%% marker line.
+#   3. Validate the rendered file:   visudo -c -f <rendered-file>
+#   4. Install it only after step 3 passes:
+#        install -o root -g root -m 0440 <rendered-file> \
+#          /etc/sudoers.d/autophagy-skill-store
+#
+# Placeholders:
+#   %%DEPLOY_USER%%  the unprivileged orchestrator account that runs
+#                    automation/deploy-skill.sh.
+#
+# The command path is NOT a placeholder: it is the fixed install location of the
+# root-owned store helper, and automation/deploy-skill.sh invokes exactly this
+# path. The two must stay byte-identical or the mount stage is denied.
+#
+# The marker line below is an intentional sudoers syntax error, so `visudo -c -f`
+# fails on the unrendered template instead of silently accepting it.
+%%TEMPLATE_NOT_RENDERED%%
+
+%%DEPLOY_USER%% ALL=(root) NOPASSWD: /usr/local/libexec/autophagy-install-skill install --skill * --hash *
+%%DEPLOY_USER%% ALL=(root) NOPASSWD: /usr/local/libexec/autophagy-install-skill install-managed --publisher * --skill * --hash *
+%%DEPLOY_USER%% ALL=(root) NOPASSWD: /usr/local/libexec/autophagy-install-skill remove --skill *

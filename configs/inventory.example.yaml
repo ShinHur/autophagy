@@ -1,0 +1,64 @@
+# Inventory schema version consumed by deployment tooling.
+version: 1
+
+# Public-safe example nodes keyed by their stable inventory names.
+nodes:
+  # Gateway and skill-deployment node.
+  node-a:
+    # SSH hostname used by deployment commands.
+    ssh_host: node-a
+    # Documentation-only RFC 5737 address; replace it in a private inventory.
+    address: 192.0.2.10
+    # Workload assignments for this node.
+    roles:
+      # Runs the owner-facing agent gateway.
+      agent_gateway: true
+      # Builds and activates approved skill releases.
+      skill_deployment: true
+      # Does not host the retrieval/RAG workload.
+      retrieval_rag: false
+    # Operating-system account roles provisioned on this node.
+    accounts:
+      # Primary owner-facing agent runtime account.
+      - agent
+      # Independent peer-attestation runtime account.
+      - peer
+      # Deployment and maintenance account.
+      - ops
+    # Runtime roots resolved from the public environment contract.
+    paths:
+      # Checkout or immutable release root.
+      deploy_root: "${AUTOPHAGY_DEPLOY_ROOT}"
+      # Protected credentials and runtime-state root.
+      private_root: "${AUTOPHAGY_PRIVATE_ROOT}"
+      # Live approved-skills root.
+      skills_root: "${AUTOPHAGY_SKILLS_ROOT}"
+
+  # Retrieval and RAG node.
+  node-b:
+    # SSH hostname used by maintenance commands.
+    ssh_host: node-b
+    # Documentation-only RFC 5737 address; replace it in a private inventory.
+    address: 192.0.2.11
+    # Workload assignments for this node.
+    roles:
+      # Does not run the owner-facing gateway.
+      agent_gateway: false
+      # Does not activate skill releases.
+      skill_deployment: false
+      # Runs retrieval, indexing, and RAG services.
+      retrieval_rag: true
+    # Operating-system account roles provisioned on this node.
+    accounts:
+      # Service account for owner-scoped retrieval jobs.
+      - agent
+      # Deployment and maintenance account.
+      - ops
+    # Runtime roots resolved from the public environment contract.
+    paths:
+      # Checkout or immutable release root.
+      deploy_root: "${AUTOPHAGY_DEPLOY_ROOT}"
+      # Protected credentials and runtime-state root.
+      private_root: "${AUTOPHAGY_PRIVATE_ROOT}"
+      # Live approved-skills root.
+      skills_root: "${AUTOPHAGY_SKILLS_ROOT}"

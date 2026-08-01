@@ -1,0 +1,68 @@
+# E11 drive-archive E2E bank: batch-digest owner approval mirrors tracked
+# deliverables into the owner's Drive via the existing gws CLI. Fully offline
+# (temp dirs + stub gws/Discord), zero network, zero real sends.
+#
+# happy: producer posts one digest for the changed in-scope files; owner ✅
+# triggers the reaction-only watcher to write the manual_reaction approval
+# record (accepted by the REAL external_effect_gate), run the gated upload, and
+# DM the owner the Drive links; the cursor advances so a re-run is a no-op.
+# cancel: owner ⛔ discards the batch with ZERO uploads; an unknown hash is
+# refused fail-closed.
+version: 1
+id: drive-archive
+title: "E11 drive-archive batch-digest sync (offline, zero real send)"
+driver: tests/e2e/drivers/w4_local.sh
+actor: tests/e2e/drivers/drive_archive_actor.py
+
+cases:
+  - id: batch_upload_happy
+    kind: happy
+    steps:
+      - "plan enumerates the 4 in-scope tracked deliverables with no external effect"
+      - "request posts one batch digest (file list + action_hash) to the owner-DM approval stub and stores a PendingBatch"
+      - "owner ✅ -> reaction-only watcher writes the manual_reaction record accepted by the real gate, uploads all files, advances the cursor, DMs the owner"
+      - "a re-run reports NO-CHANGES; all transports are stubs so real network sends stay 0"
+    expect:
+      plan_file_count: 4
+      request_posted: true
+      digest_has_hash: true
+      pending_stored: true
+      approval_written: true
+      approval_accepted_by_gate: true
+      files_uploaded: 4
+      receipts_have_links: true
+      cursor_advanced: true
+      owner_dm_sent: true
+      status_pending_after: 0
+      rerun_no_changes: true
+      real_network_sends: 0
+      error: null
+
+  - id: cancel_and_fail_closed
+    kind: edge
+    steps:
+      - "a changed file yields a 1-file digest; owner ⛔ discards the batch with ZERO uploads and clears the pending record"
+      - "uploading an unknown hash is refused fail-closed (exit 1)"
+    expect:
+      cancel_request_files: 1
+      cancel_upload_delta: 0
+      cancel_pending_cleared: true
+      unknown_hash_refused: true
+      error: null
+
+  - id: supersede_and_dedupe
+    kind: edge
+    steps:
+      - "request posts one digest; a new in-scope file changes the batch, so the next request supersedes it — the old approval message is deleted and its pending record dropped before the new digest is posted"
+      - "exactly one pending record survives and it binds the latest batch hash"
+      - "requesting again with no change reports SYNC-PENDING and posts nothing (no duplicate approval surface)"
+      - "while the watcher holds the pending claim, a changed batch is SYNC-DEFERRED reason=batch-in-flight and nothing is posted or destroyed"
+    expect:
+      superseded_message_deleted: true
+      new_message_posted: true
+      supersede_token: true
+      pending_records_after: true
+      pending_hash_is_latest: true
+      repeat_posts_nothing: true
+      claim_defers: true
+      error: null

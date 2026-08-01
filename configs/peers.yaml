@@ -1,0 +1,30 @@
+# Peer registry: agent_id <-> Discord bot user id.
+# Consumed by automation/report_hub (collector classification),
+# skills/calendar (calendar<->coordination arbitration) and automation/skill_gate.
+# A report whose author is not listed here (or whose claimed agent_id does not
+# match its author's registration) is still collected, but marked
+# `unregistered` in the hub database and dashboard.
+#
+# THIS IS AN EXAMPLE REGISTRY. The two entries below are placeholders with
+# synthetic bot user ids; replace them with your own agents before use.
+#
+# Field contract (automation/report_hub/registry.py validates strictly):
+#   <agent_id>        non-empty string key, used verbatim in reports and in the
+#                     calendar/coordination routing guard.
+#   bot_user_id       Discord application (bot) user id — digits only, unique
+#                     across the file. Not a token; safe to commit.
+#   bot_name          display name of the bot, for human-readable dashboards.
+#   account           local service account the agent runs as.
+#
+# To register a new team agent: add an entry, then restart the report-hub
+# collector service after syncing the deploy copy.
+version: 1
+peers:
+  agent-primary:
+    bot_user_id: "100000000000000001"
+    bot_name: Example-Agent
+    account: agent
+  agent-peer:
+    bot_user_id: "100000000000000002"
+    bot_name: Example-Peer
+    account: peer

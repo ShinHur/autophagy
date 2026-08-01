@@ -1,0 +1,17 @@
+# TEMPLATE: render %%AUTOPHAGY_RUNTIME_ROOT%%, %%AUTOPHAGY_REPAIR_WORK_ROOT%%,
+# and %%AUTOPHAGY_PRIVATE_ROOT%% before installing this unit.
+[Unit]
+Description=Autophagy ops repair owner-approval reaction watcher
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=ops
+Group=ops
+WorkingDirectory=%%AUTOPHAGY_RUNTIME_ROOT%%
+Environment=PYTHONPATH=%%AUTOPHAGY_RUNTIME_ROOT%%
+EnvironmentFile=/etc/autophagy/repair-approval.env
+ExecStart=/usr/bin/python3 %%AUTOPHAGY_RUNTIME_ROOT%%/automation/repair/repair_ops_reaction_watch.py
+NoNewPrivileges=yes
+ProtectHome=yes
+ReadWritePaths=%%AUTOPHAGY_REPAIR_WORK_ROOT%% %%AUTOPHAGY_PRIVATE_ROOT%%/repair-logs %%AUTOPHAGY_PRIVATE_ROOT%%/repair-plans %%AUTOPHAGY_PRIVATE_ROOT%%/repair-approvals.jsonl %%AUTOPHAGY_PRIVATE_ROOT%%/repair-approval-pending %%AUTOPHAGY_PRIVATE_ROOT%%/repair-state

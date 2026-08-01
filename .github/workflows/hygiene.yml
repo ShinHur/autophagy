@@ -1,0 +1,49 @@
+name: Repository hygiene
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Public release gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the unit-test runner
+        run: python3 -m pip install --disable-pip-version-check pytest==8.4.2
+
+      - name: Scan generic public-release data
+        run: python3 tools/repo_scan.py --profile public-generic --root .
+
+      - name: Scan unqualified documentation claims
+        run: python3 tools/repo_scan.py --profile docs-claims --root .
+
+      - name: Scan release structure
+        run: python3 tools/repo_scan.py --profile public-generic --root . --checks paths,symlinks,binaries,excluded-dirs
+
+      - name: Run unit tests
+        run: python3 -m pytest tests/unit -q
+
+      - name: Install pinned gitleaks binary
+        shell: bash
+        run: |
+          archive="gitleaks_8.30.1_linux_x64.tar.gz"
+          curl --fail --location --silent --show-error "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/${archive}" --output "${RUNNER_TEMP}/${archive}"
+          printf '%s  %s\n' "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb" "${RUNNER_TEMP}/${archive}" | sha256sum --check --status
+          mkdir "${RUNNER_TEMP}/gitleaks"
+          tar --extract --gzip --file "${RUNNER_TEMP}/${archive}" --directory "${RUNNER_TEMP}/gitleaks"
+          install --mode=0755 "${RUNNER_TEMP}/gitleaks/gitleaks" "${RUNNER_TEMP}/gitleaks-bin"
+
+      - name: Scan secrets with gitleaks
+        run: "${RUNNER_TEMP}/gitleaks-bin" dir --no-banner --redact .

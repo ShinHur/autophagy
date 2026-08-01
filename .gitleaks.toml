@@ -1,0 +1,31 @@
+# gitleaks configuration.
+#
+# This file is published with the repository, so it must never contain a real
+# secret, credential, host name, account id, or absolute path. An allowlist that
+# quotes the value it silences leaks that value to everyone who clones the repo.
+# Keep every entry a generic pattern.
+#
+# Rule of thumb when a finding needs silencing:
+#   1. First try to remove the value from the code (best).
+#   2. Otherwise add a NARROW regex for the placeholder shape.
+#   3. Never add a `paths` entry: gitleaks uses allowlist `paths` to skip whole
+#      files BEFORE any rule runs (verified with gitleaks 8.30.1 — adding
+#      `paths` dropped ~211 KB of tests/e2e from the scan, and `condition =
+#      "AND"` does not change that). A real credential dropped into an
+#      exempted tree would never be reported again.
+title = "autophagy gitleaks config"
+
+[extend]
+useDefault = true
+
+# The end-to-end drivers inject placeholder credentials into the environment of
+# the subprocess under test, and the fixtures carry search markers; both match
+# the default `generic-api-key` rule. Allow the placeholder SHAPES only — every
+# file in the repository, tests/e2e included, still gets scanned in full.
+[[allowlists]]
+description = "synthetic placeholders only (DUMMY-* env values, *-fixture-*-marker tokens)"
+regexTarget = "match"
+regexes = [
+  '''\bDUMMY-[A-Za-z0-9._-]+''',
+  '''\b[a-z0-9]+-fixture-[a-z0-9-]+-marker\b''',
+]

@@ -1,0 +1,67 @@
+# Normalize line endings in the index. Every text file is stored with LF and
+# checked out with LF, so a checkout on Windows cannot silently change the bytes
+# that the deployment provenance check compares against the remote baseline.
+* text=auto eol=lf
+
+# --- source and configuration -------------------------------------------------
+*.py     text eol=lf diff=python
+*.pyi    text eol=lf diff=python
+*.sh     text eol=lf
+*.bash   text eol=lf
+*.md     text eol=lf diff=markdown
+*.txt    text eol=lf
+*.json   text eol=lf
+*.yaml   text eol=lf
+*.yml    text eol=lf
+*.toml   text eol=lf
+*.cfg    text eol=lf
+*.ini    text eol=lf
+*.env    text eol=lf
+.env.example      text eol=lf
+*.example         text eol=lf
+Dockerfile        text eol=lf
+.dockerignore     text eol=lf
+.gitignore        text eol=lf
+.gitattributes    text eol=lf
+
+# Executable entrypoints must keep LF regardless of platform settings: a CRLF
+# shebang line makes the interpreter lookup fail with an opaque error.
+*.service  text eol=lf
+*.timer    text eol=lf
+
+# Dependency lock files are text, but diffing them line by line is noise.
+*.lock   text eol=lf -diff linguist-generated
+
+# --- binary-ish paths ---------------------------------------------------------
+# None of these are tracked today. They are declared so that a future addition
+# is never passed through end-of-line or whitespace normalization, which would
+# corrupt the bytes and invalidate any checksum taken over them.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.webp   binary
+*.ico    binary
+*.pdf    binary
+*.zip    binary
+*.gz     binary
+*.tgz    binary
+*.tar    binary
+*.xz     binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.otf    binary
+*.db     binary
+*.sqlite binary
+*.sqlite3 binary
+*.hwpx   binary
+*.docx   binary
+*.xlsx   binary
+*.pptx   binary
+
+# --- vendored and generated ---------------------------------------------------
+# Vendored third-party source is kept byte-identical to upstream; excluding it
+# from language statistics keeps the reported composition honest.
+skills/procurement/vendor/**  linguist-vendored
+skills/AUTO-GENERATED.md      linguist-generated

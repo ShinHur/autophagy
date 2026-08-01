@@ -1,0 +1,29 @@
+# GitGuardian (ggshield) configuration — mirrors the .gitleaks.toml intent.
+#
+# This file is published with the repository, so it must never contain a real
+# secret, credential, host name, or account id. Every value below is a synthetic
+# placeholder that the end-to-end drivers and fixtures hard-code on purpose.
+#
+# `ignored-paths` is deliberately NOT used: a path exemption turns off every
+# detector for a whole tree, so a genuine credential committed there would never
+# be reported. Ignore individual placeholder VALUES instead — a stale entry only
+# costs a false positive, never a missed secret.
+#
+# To add a new placeholder: append an `ignored-matches` entry with a `name`
+# explaining why the value is not a secret, and add the matching shape to
+# `.gitleaks.toml` as well so both scanners agree.
+version: 2
+secret:
+  ignored-matches:
+    - name: "e2e driver placeholder credential (patent actor)"
+      match: DUMMY-w5-patent
+    - name: "e2e driver placeholder credential (prompt actor)"
+      match: DUMMY-w5-prompt
+    - name: "e2e driver placeholder credential (proposal actor)"
+      match: DUMMY-w5-proposal
+    - name: "e2e driver placeholder credential (research-trends actor)"
+      match: DUMMY-w5-trends
+    - name: "e2e fixture search marker (meeting note)"
+      match: w2e6-fixture-meeting-marker
+    - name: "e2e fixture search marker (wiki note)"
+      match: w2e6-fixture-wiki-marker

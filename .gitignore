@@ -1,0 +1,76 @@
+# --- secrets and local environment -------------------------------------------
+# Never commit a real environment file. `.env.example` is the tracked template
+# and must stay visible, so it is re-included explicitly after the `.env*` sweep.
+.env
+.env*
+!.env.example
+!.env.*.example
+
+# Credential material of any shape.
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+id_rsa*
+id_ecdsa*
+id_ed25519*
+known_hosts
+credentials.json
+token.json
+service-account*.json
+*.age
+
+# --- logs and databases -------------------------------------------------------
+*.log
+logs/*
+!logs/.gitkeep
+*.db
+*.sqlite
+*.sqlite3
+
+# --- caches and build output --------------------------------------------------
+.codegraph
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+node_modules/
+.direnv/
+.cache/
+*_cache/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+*.egg-info/
+build/
+dist/
+htmlcov/
+.coverage
+.coverage.*
+
+# --- editor and OS noise ------------------------------------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# --- agent run-state ----------------------------------------------------------
+# Local agent working state (session continuation, boulder state, plans, notepads)
+# lives under .omo/. None of it belongs in this public repository, so the whole
+# directory is ignored rather than a few files inside it.
+.omo/
+
+# mail-mode: tracked seed = configs/mail-mode.default.json; the old live path is
+# runtime-only residue and must never re-enter the index. .repair-plans/ = runtime state.
+/configs/mail-mode.json
+/.repair-plans/
+
+# patent-prep backup: real invention material / ciphertext must never enter the repo.
+# Authoritative drafts live outside the checkout; these guard stray copies.
+skills/patent-prep/**/draft.md
+tests/fixtures/patent-export/*.md
+!tests/fixtures/patent-export/synthetic_*.md
