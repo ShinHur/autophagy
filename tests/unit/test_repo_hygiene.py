@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import os
 import subprocess
 import sys
@@ -296,3 +297,62 @@ def test_workflow_lint_detects_the_shape_that_shipped_broken() -> None:
     # Then: only the published form is rejected.
     assert broken_offenders, "lint missed the shape that actually broke CI"
     assert not fixed_offenders, fixed_offenders
+
+
+_ISOLATED_SUBSERVICES = ("configs/rag/", "configs/litellm-staging/")
+_TEST_ONLY_DEPENDENCIES = frozenset({"pytest"})
+
+
+def _module_level_imports(tree: "ast.Module") -> set[str]:
+    """Top-level import roots only — imports inside a function are lazy by design."""
+    roots: set[str] = set()
+    for node in tree.body:
+        if isinstance(node, ast.Import):
+            roots.update(alias.name.split(".", 1)[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+            roots.add(node.module.split(".", 1)[0])
+    return roots
+
+
+def test_main_tree_imports_only_the_standard_library_at_module_level() -> None:
+    """A third-party import at module scope breaks every checkout that lacks it.
+
+    The main tree is standard-library first: optional dependencies are imported
+    inside the function that needs them, behind a ``ModuleNotFoundError`` fallback.
+    One module imported PyYAML at the top instead, which passed on a machine that
+    happened to have it installed and failed the moment CI ran on a clean one —
+    collection aborted before a single test executed. Nothing checked this, so
+    "standard library first" was a claim rather than a property.
+
+    Isolated subservices under ``configs/`` declare their own dependencies and
+    lockfiles, and the test suite may use its runner; everything else must import
+    only stdlib or repository-local modules at module scope.
+    """
+    # Given: every Python module outside the declared-dependency subtrees.
+    local_roots = {
+        entry.name for entry in REPO_ROOT.iterdir() if entry.is_dir() and not entry.name.startswith(".")
+    }
+    local_modules = set()
+    for path in REPO_ROOT.rglob("*.py"):
+        if "__pycache__" in path.parts:
+            continue
+        local_modules.add(path.stem)
+        local_modules.add(path.parent.name)
+    known = set(sys.stdlib_module_names) | local_roots | local_modules | _TEST_ONLY_DEPENDENCIES
+
+    # When: their module-level import roots are collected.
+    offenders: dict[str, set[str]] = {}
+    for path in sorted(REPO_ROOT.rglob("*.py")):
+        relative = path.relative_to(REPO_ROOT).as_posix()
+        if "__pycache__" in path.parts or relative.startswith(_ISOLATED_SUBSERVICES):
+            continue
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except (OSError, SyntaxError):  # pragma: no cover - surfaced by other gates
+            continue
+        external = _module_level_imports(tree) - known
+        if external:
+            offenders[relative] = external
+
+    # Then: none of them reaches outside the standard library.
+    assert not offenders, f"module-level third-party imports: {offenders}"

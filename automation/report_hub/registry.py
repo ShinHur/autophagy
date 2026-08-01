@@ -5,9 +5,67 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-import yaml
+from typing import Any
 
 SUPPORTED_VERSION = 1
+
+
+def _scalar(text: str) -> Any:
+    """Read one constrained YAML scalar: a quoted string, an integer, or bare text."""
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in "\"'":
+        return text[1:-1]
+    if text.isdigit():
+        return int(text)
+    return text
+
+
+def _fallback_document(raw: str) -> dict[str, Any]:
+    """Parse the constrained peers shape when PyYAML is not installed.
+
+    This mirrors the sibling rule loaders under ``skills/``: PyYAML is an
+    optional dependency, so a checkout that has installed nothing must still be
+    able to read the one document shape this file documents. Only that shape is
+    understood — anything else produces a structure the strict validation below
+    rejects, so an unreadable file fails closed rather than loading as empty.
+    """
+    document: dict[str, Any] = {}
+    peers: dict[str, dict[str, Any]] = {}
+    current: dict[str, Any] | None = None
+    in_peers = False
+    for line in raw.splitlines():
+        content = line.split("#", 1)[0].rstrip()
+        if not content.strip():
+            continue
+        indent = len(content) - len(content.lstrip())
+        value = content.strip()
+        if indent == 0:
+            in_peers = value == "peers:"
+            current = None
+            if not in_peers and ":" in value:
+                key, _, scalar = value.partition(":")
+                document[key.strip()] = _scalar(scalar.strip())
+            continue
+        if not in_peers:
+            continue
+        if indent == 2 and value.endswith(":"):
+            current = {}
+            peers[value[:-1].strip()] = current
+        elif indent == 4 and current is not None and ":" in value:
+            key, _, scalar = value.partition(":")
+            current[key.strip()] = _scalar(scalar.strip())
+    document["peers"] = peers
+    return document
+
+
+def _parse_document(text: str, path: Path) -> Any:
+    try:
+        import yaml  # noqa: PLC0415
+    except ModuleNotFoundError:
+        return _fallback_document(text)
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError as error:
+        raise RegistryError(f"cannot read peers file {path}: {error}") from error
 
 
 class RegistryError(ValueError):
@@ -40,9 +98,10 @@ class PeerRegistry:
 def load_registry(path: Path) -> PeerRegistry:
     """Parse and strictly validate the peers.yaml registry."""
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as error:
+        text = path.read_text(encoding="utf-8")
+    except OSError as error:
         raise RegistryError(f"cannot read peers file {path}: {error}") from error
+    raw = _parse_document(text, path)
     if not isinstance(raw, dict) or raw.get("version") != SUPPORTED_VERSION:
         raise RegistryError(f"peers file {path} must declare version: {SUPPORTED_VERSION}")
     peers_node = raw.get("peers")

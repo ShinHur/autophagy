@@ -77,6 +77,16 @@
 
 3. **린트는 `ruff`를 쓴다.** 역시 표준 라이브러리 밖이며, CI 필수 단계는 아니다.
 
+4. **`PyYAML`은 선택 의존이다.** 설치돼 있으면 YAML 설정을 그것으로 읽고, 없으면 각
+   호출부가 자기 파일의 제한된 형태만 이해하는 폴백 파서로 읽는다 — 어느 쪽이든 검증은
+   동일하게 엄격하며, 해석할 수 없는 문서는 비어 있는 것으로 넘어가지 않고 거부된다.
+   따라서 아무것도 설치하지 않은 체크아웃에서도 `python3 -m pytest tests/unit`이 통과한다.
+
+   이 규칙은 산문이 아니라 테스트로 강제된다:
+   `tests/unit/test_repo_hygiene.py::test_main_tree_imports_only_the_standard_library_at_module_level`이
+   메인 트리 전체를 파싱해 **모듈 최상위**의 서드파티 import를 거부한다. 선택 의존은 반드시
+   그것을 쓰는 함수 안에서 import하고 `ModuleNotFoundError`를 처리해야 한다.
+
 최소 버전은 **Python 3.12**다. 코드가 `match`/`assert_never`, `StrEnum`, `@override`,
 `type`·`Final` 계열 타이핑을 쓰고 CI도 3.12로 고정한다.
 
