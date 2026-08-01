@@ -46,4 +46,6 @@ jobs:
           install --mode=0755 "${RUNNER_TEMP}/gitleaks/gitleaks" "${RUNNER_TEMP}/gitleaks-bin"
 
       - name: Scan secrets with gitleaks
-        run: "${RUNNER_TEMP}/gitleaks-bin" dir --no-banner --redact .
+        shell: bash
+        run: |
+          "${RUNNER_TEMP}/gitleaks-bin" dir --no-banner --redact .

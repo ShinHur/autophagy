@@ -226,3 +226,73 @@ def test_derived_artifacts_are_skipped_while_source_is_still_scanned(tmp_path: P
     assert "src/leak.py" in dirty.stdout
     assert "__pycache__" not in dirty.stdout
     assert "cached.pyc" not in dirty.stdout
+
+
+def _workflow_files() -> list[Path]:
+    workflows = REPO_ROOT / ".github" / "workflows"
+    return sorted(p for p in workflows.glob("*.y*ml") if p.is_file())
+
+
+def _unterminated_quoted_scalars(text: str) -> list[str]:
+    """Lines whose value opens with a quote but carries unquoted trailing content.
+
+    YAML reads ``run: "$X/bin" --flag`` as the scalar ``$X/bin`` followed by
+    garbage and refuses the document. GitHub then reports only "a workflow file
+    issue" and runs nothing — so a broken gate looks identical to an absent one.
+    """
+    offenders: list[str] = []
+    for number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("#") or ":" not in stripped:
+            continue
+        value = stripped.split(":", 1)[1].strip()
+        if not value or value[0] not in "\"'":
+            continue
+        quote = value[0]
+        closing = value.find(quote, 1)
+        if closing == -1:
+            offenders.append(f"{number}: {stripped}")
+            continue
+        remainder = value[closing + 1 :].strip()
+        if remainder and not remainder.startswith("#"):
+            offenders.append(f"{number}: {stripped}")
+    return offenders
+
+
+def test_every_workflow_file_is_parseable_yaml() -> None:
+    """A CI definition that cannot parse is a gate that silently never runs.
+
+    This repository gates its own contents, but nothing gated the gate: the
+    workflow shipped with a scalar YAML could not read, so the first push
+    reported a failure without executing a single check. The lint is
+    dependency-free on purpose — it has to hold in a checkout that has installed
+    nothing.
+    """
+    # Given: the workflow definitions that CI will load.
+    workflows = _workflow_files()
+
+    # When: each is inspected for the malformed-scalar shape.
+    assert workflows, "no workflow files found"
+    offenders = {
+        workflow.name: _unterminated_quoted_scalars(workflow.read_text(encoding="utf-8"))
+        for workflow in workflows
+    }
+
+    # Then: none carries a value YAML would refuse.
+    broken = {name: lines for name, lines in offenders.items() if lines}
+    assert not broken, f"unparseable YAML scalars: {broken}"
+
+
+def test_workflow_lint_detects_the_shape_that_shipped_broken() -> None:
+    """The lint must fail on the exact line that broke CI, or it proves nothing."""
+    # Given: the malformed step as it was published, and its corrected form.
+    broken = '        run: "${RUNNER_TEMP}/gitleaks-bin" dir --no-banner --redact .\n'
+    fixed = '        run: \'"${RUNNER_TEMP}/gitleaks-bin" dir --no-banner --redact .\'\n'
+
+    # When: both are linted.
+    broken_offenders = _unterminated_quoted_scalars(broken)
+    fixed_offenders = _unterminated_quoted_scalars(fixed)
+
+    # Then: only the published form is rejected.
+    assert broken_offenders, "lint missed the shape that actually broke CI"
+    assert not fixed_offenders, fixed_offenders
