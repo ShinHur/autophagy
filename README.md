@@ -1,184 +1,236 @@
 # autophagy
 
-A personal agent that acts on its owner's behalf over a chat transport — and asks first.
+**나 대신 일하되, 밖으로 나가는 일은 먼저 묻는 개인 에이전트.**
+
+메일을 읽고 일정을 확인하고 문서를 뒤지는 건 알아서 합니다. 하지만 메일을 **보내거나**,
+일정을 **잡거나**, 문서를 **발행하거나**, 돈을 **쓰는** 순간 멈춰 서서 당신의 승인을 받습니다.
+
+---
+
+## 60초만에 확인하기
+
+계정도, 설정도, 네트워크도 필요 없습니다. clone하고 아래를 그대로 붙여넣으세요.
+
+```bash
+git clone https://github.com/orientpine/autophagy
+cd autophagy
+
+python3 - <<'PY'
+from automation.interop.external_effect_gate import (
+    ApprovalContext, ToolCall, evaluate_tool_call, load_denylist,
+)
+deny = load_denylist("configs/external-effect-tools.yaml")
+ctx = ApprovalContext(approval_log=None, owner_id="100000000000000001", e2e_test_mode=False)
+
+for label, cmd in [
+    ("메일 읽기", "gws gmail messages list --max 5"),
+    ("메일 발송", "gws gmail +send --to someone@example.invalid --subject hi"),
+]:
+    d = evaluate_tool_call(ToolCall("bash", {"command": cmd}), deny, ctx)
+    print(f"{label}  →  외부효과={d.external_effect}  허용={d.allowed}  사유={d.reason}")
+PY
+```
+
+나오는 출력:
+
+```text
+메일 읽기  →  외부효과=False  허용=True  사유=None
+메일 발송  →  외부효과=True  허용=False  사유=approval_required
+```
+
+이게 이 시스템의 전부입니다. **읽기는 그냥 통과하고, 밖으로 나가는 일은 승인 기록이 없으면
+거부됩니다.** 방금 두 번째 명령은 실행되지 않았고, 저 주소로 아무것도 가지 않았습니다.
+
+---
+
+## 이게 뭔가요
+
+Discord로 대화하는 개인 비서입니다. "지난주 메일 정리해줘", "다음주 화요일 세미나 일정 잡아줘"
+같은 걸 시키면 알아서 처리하되, **결과를 밖으로 내보내기 직전에 당신에게 확인을 받습니다.**
+
+확인은 간단합니다. 봇이 초안을 만들어 DM으로 보내면 ✅ 또는 ⛔를 누르면 됩니다. 답장을
+타이핑할 필요도 없습니다.
+
+```
+[봇] 메일 초안을 준비했습니다.
+     받는 사람: (연구실 동료)
+     제목: 세미나 일정 안내
+     ─────────────────────────
+     안녕하세요, 다음 주 세미나는...
+     ─────────────────────────
+     ✅ 보내기   ⛔ 취소
+```
+
+✅를 누르면 보내고, ⛔를 누르면 버립니다. **누르지 않으면 아무 일도 일어나지 않습니다.**
+
+## 왜 이렇게 만들었나요
+
+LLM 에이전트에게 메일 계정과 캘린더를 맡기는 건 편하지만 무섭습니다. 잘못된 사람에게
+메일이 가거나, 없는 일정이 잡히거나, 초안이 최종본으로 발송되는 사고는 되돌릴 수 없습니다.
+
+그래서 이 시스템은 **에이전트를 똑똑하게 만드는 대신 브레이크를 확실하게** 만들었습니다.
+
+- **승인은 내용에 묶입니다.** 당신이 승인한 건 "메일 발송"이 아니라 *그 초안 그 내용*입니다.
+  승인 후에 내용이 바뀌면 실행되지 않습니다.
+- **애매하면 멈춥니다.** 설정을 못 읽거나, 대상이 모호하거나, 승인 기록을 확인할 수 없으면
+  진행하지 않습니다. 잘 될 것 같으면 해보는 게 아니라, 확실하지 않으면 안 합니다.
+- **승인 메시지는 하나뿐입니다.** 같은 요청에 승인 창이 여러 개 뜨거나, 당신이 누른 ✅가
+  다른 메시지에 묻히는 일이 없습니다.
+
+이 규칙들은 문서에 적힌 약속이 아니라 **테스트가 강제하는 동작**입니다. 이 저장소에 포함된
+변경 경로와 어댑터에 한해서요.
+
+## 무엇을 대신 해주나요
+
+스킬 17개가 들어 있습니다. 전부 켤 필요는 없고, 필요한 것만 배포하면 됩니다.
+
+| 분야 | 스킬 | 하는 일 |
+|---|---|---|
+| 소통·일정 | `mail` `calendar` `coordination` `meeting` | 메일 분류·초안·발송, 일정 관리, 다른 사람 에이전트와 일정 조율, 회의록에서 할 일 추출 |
+| 문서 작성 | `doctype` `procurement` `proposal` `report` `patent-prep` | 서식 학습·재사용, 구매 서류, 제안서, 보고서·슬라이드, 발명 신고서 |
+| 기억·검색 | `wiki` `recall` `prompt` `topics` | 개인 위키와 판단 기록, 개인 자료 검색, 프롬프트 자산, 관심 주제 추적 |
+| 실무 | `budget` `todo` | 과제비 원장 조회·변경 감지, 할 일 등록 |
+| 시스템 | `repair` `hello-autophagy` | 실패를 스스로 진단해 수정안 제출, 배포 파이프라인 데모 |
+
+**밖으로 나가는 모든 동작**(발송·생성·발행·지출·배포)은 예외 없이 승인을 거칩니다.
+
+## 시작하기
+
+세 갈래가 있습니다. 처음부터 다 갖출 필요 없습니다.
+
+### 1. 그냥 살펴보기 — 계정 불필요, 5분
+
+위의 60초 데모가 여기에 해당합니다. 더 보고 싶으면:
+
+```bash
+python3 -m pytest tests/unit -q        # 테스트 2,756개
+python3 tools/repo_scan.py --profile public-generic --root .
+```
+
+전체 안내는 **[빠른 시작](docs/quickstart.md)** 에 있습니다. 로컬에서 도는 것만 다루며
+외부로 나가는 동작은 하나도 없습니다.
+
+### 2. 승인 루프 하나만 돌려보기 — Discord만 있으면 됨
+
+"초안 생성 → DM으로 확인 요청 → ✅ → 실행"이 한 바퀴 도는 최소 구성입니다. Google도
+모델 게이트웨이도 필요 없습니다. **[설치·운영 매뉴얼 §13](docs/설치-운영-매뉴얼.md)** 에
+최소 경로만 따로 정리해 뒀습니다.
+
+### 3. 제대로 쓰기
+
+메일·일정·문서·예산까지 쓰려면 외부 서비스 연결이 필요합니다.
+**[설치·운영 매뉴얼](docs/설치-운영-매뉴얼.md)** 이 빈 머신부터 12단계로 안내합니다.
+각 단계마다 실행할 명령, 무엇이 바뀌는지, 성공했는지 확인하는 법이 붙어 있습니다.
+
+> 시간이 걸립니다. 서비스 계정, 봇 등록, 승인 채널을 먼저 만들어야 하고 그 과정에 사람이
+> 직접 해야 하는 단계가 몇 군데 있습니다. 매뉴얼은 **이 저장소가 답해주지 못하는 지점**도
+> 함께 적어 뒀습니다 — 막힐 곳을 미리 알고 가는 편이 낫기 때문입니다.
+
+## 혼자 쓰나요, 여럿이 나눠 쓰나요
+
+이 시스템은 역할이 둘로 갈립니다. **세워야 할 것이 서로 다르니 시작 전에 정하세요.**
+
+| 나는 | 역할 | 필요한 것 |
+|---|---|---|
+| 내 것만 쓴다 | **단독 운용** | 매뉴얼 12단계 |
+| 스킬을 만들어 남에게 나눠준다 | **발행자** | 12단계 + 서명 키 + 발행 절차 |
+| 남이 만든 스킬을 받아 쓴다 | **참여자** | 훨씬 적음 — 구독 설정과 자기 승인 표면 |
+
+참여자는 발행자의 인프라에 들어가지 않습니다. **자기 계정, 자기 봇, 자기 자격증명으로 자기
+인프라에서** 돌리고, 받는 건 서명된 스킬 릴리스뿐입니다. 받은 스킬도 자동으로 켜지지
+않습니다 — 검증을 통과하면 격리 보관소에 들어가고, 활성화는 당신이 직접 승인해야 합니다.
+
+자세한 건 **[매뉴얼 §14](docs/설치-운영-매뉴얼.md)** 에 있습니다.
+
+## 어떻게 동작하나요
+
+```
+당신의 요청
+   └─ 스킬 선택 ............. skills/            코드가 판정, 프롬프트 눈치가 아님
+       └─ 외부효과 분류 ..... configs/external-effect-tools.yaml   읽기=통과, 변경=게이트
+           └─ 승인 게이트 ... automation/interop/   내용 해시 결속, 승인창 하나만
+               └─ ✅ 당신의 리액션
+                   └─ 워처가 리액션만 폴링
+                       └─ 실행 (승인한 내용과 같은지 다시 대조)
+```
+
+| 구성 | 위치 | 역할 |
+|---|---|---|
+| 승인 게이트 | `automation/interop/` | 외부효과 분류, 해시 결속, 승인 생명주기 |
+| 스킬 | `skills/` | 스킬 하나당 디렉터리 하나 — 설명서 + CLI + 격리 시나리오 |
+| 워처 | `skills/*/scripts/*watch.py` | 승인 리액션만 폴링 (메시지는 건드리지 않음) |
+| 배포 | `automation/deploy-skill.sh` | 샌드박스 → 검토 → 승인 → 마운트 |
+| 검색 | `automation/rag_ingest/`, `skills/recall/` | 개인 자료 색인·검색 (선택) |
+| 자가 수리 | `automation/repair/` | 실패 재현 → 수정안 → 승인 → PR (병합은 사람이) |
+
+## 무엇이 들어 있고, 무엇이 빠졌나요
+
+이 저장소는 개인 배포본에서 **운영 기록을 걷어내고 메커니즘만 남긴** 것입니다.
+
+**들어 있음** — 승인 게이트와 그 강제 테스트, 스킬 17개, 스킬 공급망(서명·검증·격리),
+배포 안전장치, 기억·검색, 설계 문서 7편, 운영 가이드 28편, 기능 소개 32편, 위생 스캐너와 CI.
+
+**빠짐** — 특정 설치의 검증 증적과 운영 로그, 인프라 변경 이력, 장애 대응 기록, 비공개 계획,
+기관 메일 백엔드 구현(교체 가능한 계약면만 포함), 특정 호스트에 고정된 일회성 런북.
+
+전체 목록은 [기능 인벤토리](docs/features.md)에 있습니다.
+
+## 문서
+
+| 무엇이 궁금한가 | 어디로 |
+|---|---|
+| 설치하고 운영하고 싶다 | **[설치·운영 매뉴얼](docs/설치-운영-매뉴얼.md)** — 빈 머신부터 12단계 |
+| 일단 만져보고 싶다 | [빠른 시작](docs/quickstart.md) — 로컬에서만, 외부효과 없음 |
+| 왜 이렇게 설계했나 | [설계 문서 7편](docs/design/) — 승인 불변식, 스킬 수명주기, 검증 체계 |
+| 개별 기능이 궁금하다 | [기능 소개 32편](docs/기능소개/) |
+| 스킬을 직접 만들고 싶다 | [스킬 제작](docs/guide/스킬-제작.md), [운영 가이드 28편](docs/guide/) |
+| 무엇이 필요한가 | [의존성](docs/dependencies.md) — 바이너리·환경변수 전체 목록 |
+| 여러 노드로 나누고 싶다 | [배포 참조](docs/deployment-reference.md) |
+| 기여하고 싶다 | [CONTRIBUTING](CONTRIBUTING.md) · [SECURITY](SECURITY.md) |
+
+## 검증
+
+```bash
+python3 -m pytest tests/unit -q                                  # 단위·계약 테스트
+python3 tools/repo_scan.py --profile public-generic --root .     # 식별자 유출 검사
+python3 tools/repo_scan.py --profile docs-claims   --root .      # 과장된 서술 검사
+```
+
+`.github/workflows/hygiene.yml`이 push마다 위 세 가지에 구조 검사와 `gitleaks`를 더해
+실행합니다. `tests/e2e/`의 시나리오는 두 갈래입니다 — 임시 디렉터리와 대역 전송으로 도는
+오프라인 시나리오, 그리고 실제 인프라가 필요해 없으면 **건너뛰었다고 보고하는**(통과로
+위장하지 않는) 시나리오.
+
+## 라이선스
+
+MIT. [LICENSE](LICENSE)
 
 ---
 
 ## English
 
-### What this is
+**A personal agent that works on your behalf — and asks before anything leaves the machine.**
 
-`autophagy` is the sanitized, public form of a personal AI agent system. The agent reads freely:
-it can search a personal knowledge base, read mail, list calendar entries, inspect a budget ledger.
-But **every effect that leaves the machine — sending mail, writing a calendar entry, publishing a
-document, spending budget, deploying a skill — stops at an owner approval gate.** The approval is
-bound to a hash of the exact content being approved, only the owner's non-bot ✅ authorizes it, ⛔
-wins over ✅, and anything unverifiable (an unparsable policy file, an ambiguous target, a hash that
-no longer matches) fails closed rather than proceeding. This invariant is not advisory: it is enforced
-by conformance tests for the mutating paths and adapters included in this public repository.
+Reading is free: it can search your notes, read mail, list calendar entries. But **sending**
+mail, **creating** a calendar entry, **publishing** a document or **spending** budget stops at
+an owner-approval gate. Approval is bound to a hash of the exact content, only your non-bot ✅
+authorises it, ⛔ overrides ✅, and anything unverifiable fails closed rather than proceeding.
 
-The rest of the system exists to keep that invariant true under real operating conditions —
-one live approval message per logical request, reaction-only watchers that never race the agent for
-inbound messages, byte-level provenance checks before anything is deployed, and a repair path that
-can propose its own fixes but can only ever open a pull request.
+Try it with no accounts and no configuration — see the snippet at the top of this file. A read
+command passes; a send command returns `허용=False  사유=approval_required` and nothing is sent.
 
-### Orientation
+**Documentation is primarily in Korean**, including the full install-and-operate manual. The
+code, identifiers and command output are in English. If you read code more comfortably than
+Korean, start with [`docs/design/`](docs/design/) and [`automation/interop/`](automation/interop/) —
+the approval gate is about 800 lines and is the whole idea.
 
-```
-chat request
-   └─ skill routing ................ skills/<name>/           deterministic guards, not prose routing
-        └─ effect classification ... configs/external-effect-tools.yaml   read = allow, mutate = gate
-             └─ approval gate ...... automation/interop/      hash binding, single live message, ledger
-                  └─ ✅ owner reaction
-                       └─ watcher .. skills/*/scripts/*watch.py   polls reactions only
-                            └─ effect executed, re-verified against the approved hash
-```
+- Install and operate: [`docs/설치-운영-매뉴얼.md`](docs/설치-운영-매뉴얼.md) (Korean, 12 steps)
+- Evaluate locally: [`docs/quickstart.md`](docs/quickstart.md) (Korean, no external effects)
+- Design: [`docs/design/`](docs/design/) — seven documents
+- Scope, included and excluded: [`docs/features.md`](docs/features.md)
 
-| Layer | Directory | Role |
-|---|---|---|
-| Gate core | `automation/interop/` | External-effect classification, hash-bound approval lifecycle, transport adapters |
-| Skill layer | `skills/` (17 packages) | One directory per skill: `SKILL.md`, CLI entrypoint, isolated scenario, optional watcher and deploy hook |
-| Watchers | `skills/*/scripts/*watch.py`, `automation/*/` | Credential-explicit cron jobs that poll approval reactions only |
-| Deploy pipeline | `automation/deploy-skill.sh`, `deploy_provenance.sh`, `land.sh`, `checkout_mirror_probe.sh` | Sandbox → review → owner approval → mount, with byte-level provenance and mirror-drift detection |
-| Retrieval | `automation/rag_ingest/`, `configs/rag/`, `skills/recall/` | Content-hash idempotent ingest with a sensitivity boundary, queried by the recall skill |
-| Self-repair | `automation/repair/` | Isolated reproduction, patch, regression, content-bound approval, branch push, pull request |
+The approval invariant is enforced by conformance tests **for the mutating paths and adapters
+included in this public repository** — not for third-party adapters you plug in behind the
+contract, and not for implementations that are not published here.
 
-### Included / excluded
-
-This repository is a deliberate subset. Operational records of one private installation were
-removed; the mechanisms were kept.
-
-**Included**
-
-| Area | Where | What ships |
-|---|---|---|
-| Approval and external effects | `automation/interop/`, `configs/external-effect-tools.yaml`, `configs/sensitivity-rules.yaml` | The gate, the approval lifecycle facade, the effect policy seeds |
-| Skills | `skills/` | 17 skill packages including a deterministic demo skill |
-| Skill supply chain | `automation/managed_skills/`, `automation/managed_sync/`, `automation/skill_gate.py` | Signed release publishing, verification, quarantine, name-collision refusal |
-| Deployment safety | `automation/deploy-skill.sh`, `automation/deploy_provenance.sh`, `automation/land.sh`, `automation/checkout_mirror_probe.sh` | Provenance check, one-way mirror probe, landing command |
-| Self-repair | `automation/repair/` | Repair workflow and its systemd unit templates |
-| Memory and retrieval | `automation/rag_ingest/`, `automation/memory_*/`, `automation/obsidian_write/`, `configs/rag/` | Ingest, routing, curation, approved note writes |
-| Public design | `docs/design/` | Six design documents: architecture, approval invariant, skill lifecycle, watcher contract, verification and provenance, design decisions |
-| Operator guides | `docs/guide/` | 28 guides covering setup, conventions, and operations |
-| Feature notes | `docs/기능소개/` | 32 short owner-facing notes on what each finished feature does |
-| Verification | `tests/`, `tools/`, `.github/workflows/hygiene.yml` | Unit suite, offline and infrastructure-bound scenarios, release scanners, CI gate |
-
-**Excluded or reduced**
-
-| What | Why |
-|---|---|
-| QA evidence and operational logs | Point-in-time measurements and transcripts of one private installation; no code reads them. |
-| Patch history | Records of infrastructure changes made to specific hosts. |
-| Troubleshooting records | Incident notes bound to one installation's accounts, paths, and credentials. |
-| Internal planning archives | Private work plans, tickets, and session state — not a substitute for a public issue tracker. |
-| Institutional-mail backend implementation | Only the generic, replaceable backend seam ships (`skills/mail/`, `docs/guide/site-mail-backend-contract.md`). The provider-specific client, its vendored dependencies, and its runtime do not. |
-| `docs/guide/dg5-runtime-rollout-runbook.md` | One-off cutover runbook for specific hosts, releases, and units. |
-| `docs/guide/pending-user-actions.md` | Point-in-time checklist of one deployment's unfinished owner actions. |
-| `docs/guide/w0-4-account-setup.md` | Bootstrap procedure for one specific account, node, and checkout topology. |
-| `docs/guide/w0-9-openclaw-smoke.md` | Stage-1 experiment runbook pinned to one board, port, and provider. |
-| `docs/hardware-infra-openclaw.md` | Infrastructure snapshot — hosts, addresses, ports, accounts, secret locations. Reduced to a pointer; general hardware reasoning moved to [`docs/spark-활용-검토.md`](docs/spark-활용-검토.md). |
-| `configs/inventory.md` | **Reduced, not removed.** The node-role split and the port-reservation tables stay, because `configs/rag/compose.yaml` and `configs/litellm-staging/docker-compose.yml` consume those ports. Measured memory and disk figures, listening-port dumps, and reachability probes were dropped. Schema example: [`configs/inventory.example.yaml`](configs/inventory.example.yaml). |
-| One-off acceptance scripts | `automation/final/f4_scope.sh`, `automation/gmail-approval-test-send.sh`, `automation/openclaw-arm64-smoke.sh` — each pinned to one installation's inodes, accounts, ports, and evidence paths; one of them sends an actual message. |
-
-### Setup
-
-Three steps, in order. None of them is instant: this system expects service accounts, a chat
-application registration, and an approval channel to exist first.
-
-1. **Check what you need on the machine** — [`docs/dependencies.md`](docs/dependencies.md) lists every
-   external binary, the Python requirements, and every environment variable you must set, in one
-   place. Individual components also accept optional path overrides and test hooks that default
-   relative to those roots; those are documented at their call sites, not in that table.
-2. **Fill in configuration** — copy [`.env.example`](.env.example) to a private file and set the keys
-   your components need. Blank values fail closed; they do not fall back to defaults.
-3. **Follow the walkthrough** — [`docs/quickstart.md`](docs/quickstart.md).
-
-For the full ordered procedure — from an empty machine to a deployment whose approval gate
-actually closes, together with the gaps this repository does not fill —
-see [`docs/설치-운영-매뉴얼.md`](docs/설치-운영-매뉴얼.md) (Korean).
-
-Multi-node operation is optional. If you want the role split, see
-[`docs/deployment-reference.md`](docs/deployment-reference.md).
-
-### Documentation
-
-- [`docs/design/`](docs/design/) — the six design documents. Start here to understand *why* the
-  gate is shaped the way it is.
-- [`docs/guide/`](docs/guide/) — operator guides: skill authoring, watcher and cron contract,
-  incident response, chat server layout, retrieval setup.
-- [`docs/기능소개/`](docs/기능소개/) — short, owner-facing notes on individual features.
-- [`docs/features.md`](docs/features.md) — the public scope inventory.
-- [`AGENTS.md`](AGENTS.md) — the working conventions for anyone (human or agent) changing this repo.
-
-### How it is verified
-
-```bash
-python3 -m pytest tests/unit -q                                  # unit and conformance suite
-python3 tools/repo_scan.py --profile public-generic --root .     # release-data scan
-python3 tools/repo_scan.py --profile docs-claims   --root .      # unqualified-claim scan
-```
-
-`.github/workflows/hygiene.yml` runs all three on every push and pull request, plus a structural
-scan (paths, symlinks, binary containers, excluded directories) and a pinned, checksum-verified
-`gitleaks` pass. The scenario bank under `tests/e2e/` is split: offline scenarios run against
-temporary directories and stub transports; infrastructure-bound scenarios declare their
-preconditions and exit 77 (skip) when those are absent, rather than reporting a false pass.
-
----
-
-## 한국어
-
-### 무엇인가
-
-`autophagy`는 개인 AI 에이전트 시스템을 공개용으로 정리한 저장소다. 읽기는 자유롭지만
-**메일 발송, 일정 생성, 문서 발행, 예산 집행, 스킬 배포처럼 기기 밖으로 나가는 모든 작업은
-소유자 승인 게이트를 거친다.** 승인은 실행할 내용의 해시에 결속되고, 소유자의 비봇 ✅만
-인정하며, ✅와 ⛔가 함께 있으면 ⛔가 이긴다. 정책 파싱·권한 확인·대상 식별·해시 대조 중
-하나라도 불명확하면 실행하지 않는다(fail-closed). 이 불변식은 권고가 아니라 **이 공개
-저장소에 포함된 변경 경로와 어댑터에 대해** conformance 테스트로 강제된다 — 계약면 뒤에
-직접 끼워 넣은 서드파티 어댑터나 여기 공개되지 않은 구현까지 보증하지는 않는다.
-
-나머지 구성요소는 이 불변식을 실제 운영 조건에서 유지하기 위해 존재한다 — 논리 요청당
-라이브 승인 메시지 하나, 리액션만 폴링해 에이전트와 경쟁하지 않는 워처, 배포 전 바이트 단위
-출처 검증, 그리고 스스로 패치를 제안하되 pull request까지만 열 수 있는 수리 경로.
-
-### 구성
-
-| 계층 | 위치 | 역할 |
-|---|---|---|
-| 게이트 코어 | `automation/interop/` | 외부효과 분류, 해시 바인딩 승인 생명주기, 전송 어댑터 |
-| 스킬 계층 | `skills/` | 스킬 하나당 디렉터리 하나 (`SKILL.md`·CLI·격리 시나리오·워처·배포 훅) |
-| 워처 | `skills/*/scripts/*watch.py` | 승인 리액션만 폴링하는 no-agent cron |
-| 배포 파이프라인 | `automation/deploy-skill.sh` 외 | 샌드박스 → 검토 → 소유자 승인 → 마운트, 출처·미러 검증 포함 |
-| 검색 | `automation/rag_ingest/`, `configs/rag/`, `skills/recall/` | 내용 해시 멱등 인제스트와 민감도 경계 |
-| 자가 수리 | `automation/repair/` | 격리 재현·패치·회귀·내용 바인딩 승인·브랜치 push·PR |
-
-### 범위
-
-포함·제외 목록은 위 영어 절의 *Included / excluded* 표와
-[`docs/features.md`](docs/features.md)에 있다. 요약하면, **메커니즘은 남기고 특정 설치의 운영
-기록은 뺐다** — 검증 증적·운영 로그, 인프라 패치 이력, 장애 대응 기록, 비공개 계획,
-기관 메일 백엔드 구현(교체 가능한 계약면만 포함), 그리고 특정 호스트·계정·포트에 고정된
-일회성 런북과 스크립트가 제외 대상이다.
-
-### 시작하기
-
-1. [`docs/dependencies.md`](docs/dependencies.md) — 필요한 외부 바이너리, Python 요구사항,
-   직접 설정해야 하는 환경 변수 전체 목록. 기본값이 있는 경로 재정의·테스트 훅은 각 호출
-   지점에서 문서화된다.
-2. [`.env.example`](.env.example) — 비공개 파일로 복사해 값을 채운다. 빈 값은 기본값으로
-   대체되지 않고 fail-closed로 거부된다.
-3. [`docs/quickstart.md`](docs/quickstart.md) — 단계별 안내.
-
-빈 머신에서 승인 게이트가 실제로 닫히는 배포까지의 실행 순서, 그리고 이 저장소가 답해주지
-않는 지점은 [`docs/설치-운영-매뉴얼.md`](docs/설치-운영-매뉴얼.md)에 정리돼 있다.
-
-단일 노드 운용으로 충분하다. 역할 분리가 필요하면
-[`docs/deployment-reference.md`](docs/deployment-reference.md)를 참고한다.
-
-### 검증
-
-`python3 -m pytest tests/unit -q`, `python3 tools/repo_scan.py --profile public-generic --root .`,
-`python3 tools/repo_scan.py --profile docs-claims --root .` 세 가지를
-`.github/workflows/hygiene.yml`이 push·pull request마다 실행하고, 구조 스캔과 고정 버전
-`gitleaks` 검사를 함께 수행한다.
+MIT licensed.
