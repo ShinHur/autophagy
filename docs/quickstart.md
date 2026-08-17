@@ -53,8 +53,12 @@ python3 -m pytest tests/unit
 정상 결과의 마지막 줄은 다음과 같다. 실행 시간은 머신마다 다르다.
 
 ```text
-2752 passed in 41.98s
+2755 passed, 1 skipped in 41.98s
 ```
+
+건너뛴 1건은 PDF 변환 도구 `poppler`가 없을 때 skip되는 회의록 스킬 테스트
+(`tests/unit/test_meeting_skill.py`)다. `poppler`를 설치하면 이 테스트까지 실행되어 skip
+없이 통과한다. 테스트 수는 스위트가 커지면서 달라질 수 있다.
 
 `pytest tests/unit` 대신 `python3 -m pytest tests/unit`을 사용한다. 새 체크아웃에서는
 전자의 실행 경로가 `tests` 패키지를 import하지 못할 수 있지만, 후자는 현재 Python
